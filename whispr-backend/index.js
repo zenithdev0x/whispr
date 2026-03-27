@@ -1,5 +1,4 @@
 require('dotenv').config()  // loads .env file first — must be line 1
-
 const express   = require('express')
 const cors      = require('cors')
 const rateLimit = require('express-rate-limit')
@@ -13,25 +12,23 @@ app.use(cors({
   origin: [
     process.env.FRONTEND_URL,
     'http://localhost:3000',
-    'http://127.0.0.1:5500',  // VS Code Live Server
+    'http://127.0.0.1:5500',
   ],
   credentials: true
 }))
 
 app.use(express.json())
 
-// ── RATE LIMITING — prevents spam and abuse ──
-// General limit: 100 requests per 15 minutes per IP
+// ── RATE LIMITING ──
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   message: { error: 'Too many requests — slow down' }
 }))
 
-// Stricter limit for auth endpoints — prevents OTP brute force
 const authLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,  // only 10 OTP attempts per 15 mins
+  max: 10,
   message: { error: 'Too many attempts — try again in 15 minutes' }
 })
 
@@ -41,13 +38,17 @@ app.use('/posts',    require('./routes/posts'))
 app.use('/polls',    require('./routes/polls'))
 app.use('/midnight', require('./routes/midnight'))
 
-// Health check — Railway uses this to know the server is alive
+// ── ROOT ROUTE (fixes "Cannot GET /") ──
+app.get('/', (req, res) => {
+  res.json({ status: 'Whispr API is live 🚀', version: 'v1' })
+})
+
+// ── HEALTH CHECK ──
 app.get('/health', (req, res) => {
   res.json({ ok: true, time: new Date().toISOString() })
 })
 
 // ── MIDNIGHT DROP CRON JOB ──
-// Runs every day at midnight (00:00) — creates tomorrow's question
 const midnightQuestions = [
   "What are you not saying out loud tonight?",
   "What's the one thing you wish someone would ask you?",
@@ -67,7 +68,6 @@ cron.schedule('0 0 * * *', async () => {
   const tomorrow = new Date()
   tomorrow.setDate(tomorrow.getDate() + 1)
   const dateStr = tomorrow.toISOString().split('T')[0]
-
   const question = midnightQuestions[Math.floor(Math.random() * midnightQuestions.length)]
 
   await supabase.from('midnight_drops').insert({
@@ -76,7 +76,7 @@ cron.schedule('0 0 * * *', async () => {
   }).then(() => {
     console.log(`Tomorrow's drop created: "${question}"`)
   })
-}, { timezone: 'Asia/Kolkata' })  // IST timezone
+}, { timezone: 'Asia/Kolkata' })
 
 // ── START ──
 const PORT = process.env.PORT || 3000
